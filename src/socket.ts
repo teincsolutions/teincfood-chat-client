@@ -10,6 +10,7 @@ const PUSH_TIMEOUT_MS = 10000
 const JOIN_TIMEOUT_MS = 5000
 const RECONNECT_BASE_DELAY_MS = 1000
 const RECONNECT_MAX_DELAY_MS = 15000
+const MAX_AUTH_RETRIES = 3
 
 export type FrameHandler = (frame: PhoenixV2Frame) => void
 
@@ -168,6 +169,13 @@ export class PhoenixChatSocket {
     const token = this.token
     if (!token) return
 
+    // After MAX_AUTH_RETRIES consecutive failures, assume stale token
+    if (this.reconnectAttempts >= MAX_AUTH_RETRIES) {
+      this.reconnectAttempts = 0
+      this.emitter.emit("auth:expired")
+      return
+    }
+
     const prevEventsTopic = this.eventsTopic
     const prevChannels = Array.from(this.joinedChannels)
 
@@ -217,6 +225,16 @@ export class PhoenixChatSocket {
   /** Check if joined to the events channel. */
   isEventsJoined(): boolean {
     return this.eventsTopic !== null && this.joinedChannels.has(this.eventsTopic)
+  }
+
+  /** Update the auth token and reconnect immediately. */
+  updateToken(token: string): void {
+    this.token = token
+    this.reconnectAttempts = 0
+    // Close the current WS without clearing state — onclose → scheduleReconnect
+    // will pick up the new token on next connect attempt
+    this.stopHeartbeat()
+    this.ws?.close()
   }
 
   async reconnectWithToken(token: string): Promise<void> {

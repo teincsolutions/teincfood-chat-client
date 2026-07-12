@@ -78,6 +78,7 @@ export class ChatClient {
   async start(tokens: AuthTokens): Promise<void> {
     this.tokens = tokens
     await this.store.hydrate()
+    this.emitter.on("auth:expired", this.handleAuthExpiredBound)
     try {
       await this.socket.connect(tokens.access_token)
       // Auto-join the events channel for live updates
@@ -89,8 +90,11 @@ export class ChatClient {
     }
   }
 
+  private handleAuthExpiredBound = () => this.handleAuthExpired()
+
   /** Disconnect WebSocket and clear all listeners. */
   stop(): void {
+    this.emitter.off("auth:expired", this.handleAuthExpiredBound)
     this.socket.leaveEventsChannel()
     this.socket.disconnect()
     this.optimistic.clear()
@@ -110,6 +114,30 @@ export class ChatClient {
 
   setTokens(tokens: AuthTokens | null): void {
     this.tokens = tokens
+  }
+
+  /**
+   * Called when the WebSocket's auth:expired event fires.
+   * Attempts to refresh the token via onTokenExpired, then
+   * updates the socket with the new access token.
+   */
+  private handleAuthExpired(): void {
+    const cb = (this.http as any).opts?.onTokenExpired as
+      | (() => Promise<AuthTokens | null>)
+      | undefined
+    if (!cb) return
+
+    cb()
+      .then((newTokens) => {
+        if (newTokens) {
+          this.tokens = newTokens
+          this.socket.updateToken(newTokens.access_token)
+        }
+      })
+      .catch(() => {
+        // Refresh failed — session is truly dead
+        this.emitter.emit("error", new Error("Session expired"))
+      })
   }
 
   setCurrentUserId(userId: string): void {
