@@ -268,6 +268,8 @@ export function useContacts(
   const store = useRef(externalStore(getContacts)).current
 
   const refresh = useCallback(async () => {
+    // Skip fetching if business context requires business_id
+    if (context === "business" && !businessId) return
     loadingRef.current = true
     store.emit()
     try {
