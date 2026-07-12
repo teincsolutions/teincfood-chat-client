@@ -57,6 +57,10 @@ export type {
   ContactTypeRaw,
 } from "./api/conversations"
 
+export type {
+  AddContactParams,
+} from "./api/contacts"
+
 export {
   useChat,
   useConversations,

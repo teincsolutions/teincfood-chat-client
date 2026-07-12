@@ -25,6 +25,9 @@ export interface Message {
   read: boolean
   sent_at: string
   inserted_at: string
+  business_sender?: boolean
+  sender_business_name?: string | null
+  sender_business_logo?: string | null
 }
 
 /** Temp client-side ID used for optimistic reconciliation */
@@ -80,6 +83,9 @@ export interface Contact {
   conversation_id: string | null
   last_message: { text: string; sent_at: string } | null
   unread_count: number
+  contact_record_id?: string | null
+  status?: string | null
+  is_self?: boolean
 }
 
 // ─── Auth types ─────────────────────────────────────────────
