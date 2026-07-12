@@ -1,10 +1,40 @@
 import type { HttpClient } from "../http"
 import type { Conversation, PaginationMeta } from "../types"
 
+/**
+ * All contact_type values that can appear in contacts API responses.
+ * The chat API only accepts "user" | "business" | "support", so we
+ * normalize the broader set before sending.
+ */
+export type ContactTypeRaw =
+  | "user"
+  | "business"
+  | "support"
+  | "member"
+  | "rider"
+  | "buyer"
+
 export interface StartChatParams {
-  contact_type?: "user" | "business" | "support"
+  contact_type?: ContactTypeRaw
   contact_id?: string | null
   order_id?: string | null
+}
+
+/** Map contacts-API contact_type values to chat-API values. */
+function normalizeContactType(raw?: ContactTypeRaw): string | undefined {
+  switch (raw) {
+    case "member":
+    case "rider":
+    case "buyer":
+    case "user":
+      return "user"
+    case "business":
+      return "business"
+    case "support":
+      return "support"
+    default:
+      return raw
+  }
 }
 
 export function createConversationsApi(http: HttpClient) {
@@ -19,10 +49,15 @@ export function createConversationsApi(http: HttpClient) {
         .get<{ data: Conversation }>(`/conversations/${id}`)
         .then((r) => r.data),
 
-    startChat: (params: StartChatParams) =>
-      http
-        .post<{ data: Conversation }>("/chats", params)
-        .then((r) => r.data),
+    startChat: (params: StartChatParams) => {
+      const normalized = normalizeContactType(params.contact_type)
+      return http
+        .post<{ data: Conversation }>("/chats", {
+          ...params,
+          contact_type: normalized,
+        })
+        .then((r) => r.data)
+    },
 
     startSupportChat: () =>
       http

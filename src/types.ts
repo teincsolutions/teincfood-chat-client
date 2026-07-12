@@ -280,5 +280,6 @@ export interface ChatClientOptions {
   baseUrl: string
   wsUrl: string
   storage: ChatStorage
+  context?: ContactContext
   onTokenExpired?: () => Promise<AuthTokens | null>
 }

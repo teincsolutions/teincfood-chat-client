@@ -54,6 +54,7 @@ export { createMMKVStorageAdapter } from "./types"
 export type { RetryOptions } from "./retry"
 export type {
   StartChatParams,
+  ContactTypeRaw,
 } from "./api/conversations"
 
 export {
