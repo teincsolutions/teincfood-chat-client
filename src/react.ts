@@ -255,9 +255,10 @@ export function useContacts(
   client: ChatClient,
   context?: ContactContext,
   businessId?: string,
+  q?: string,
 ): UseContactsResult {
   const loadingRef = useRef(false)
-  const params = `${context ?? "buyer"}|${businessId ?? ""}`
+  const params = `${context ?? "buyer"}|${businessId ?? ""}|${q ?? ""}`
 
   const getContacts = useCallback(
     () => client.store.getContacts(),
@@ -270,12 +271,12 @@ export function useContacts(
     loadingRef.current = true
     store.emit()
     try {
-      await client.loadContacts(context, businessId)
+      await client.loadContacts(context, businessId, q)
     } finally {
       loadingRef.current = false
       store.emit()
     }
-  }, [client, store, context, businessId])
+  }, [client, store, context, businessId, q])
 
   useEffect(() => {
     refresh()
