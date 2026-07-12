@@ -114,6 +114,7 @@ export class ChatClient {
 
   setCurrentUserId(userId: string): void {
     this.currentUserId = userId
+    this.socket.currentUserId = userId
     // Auto-join events channel if socket already connected
     if (this.socket.isConnected()) {
       this.socket.joinEventsChannel(userId).catch(() => {})
@@ -182,6 +183,28 @@ export class ChatClient {
     })
 
     return temp
+  }
+
+  /**
+   * Remove a pending (optimistic) message by its client-generated ID.
+   * Useful when retrying a failed message — remove the old failed temp
+   * before re-sending.
+   */
+  removePendingMessage(clientId: string): void {
+    this.optimistic.removeByClientId(clientId)
+  }
+
+  /**
+   * Resend all messages with status "failed" across all conversations.
+   * Called automatically after reconnection.
+   */
+  resendFailedMessages(): void {
+    const all = this.optimistic.getAll()
+    for (const msg of all) {
+      if (msg.status !== "failed") continue
+      if (!this.socket.isJoined(msg.conversation_id)) continue
+      this.socket.sendMessage(msg.conversation_id, msg.content, msg.metadata)
+    }
   }
 
   // ─── Other real-time actions ──────────────────────
@@ -303,6 +326,10 @@ export class ChatClient {
         return { handled: true, event: "messages_read", data: payload as any, sequence: seq }
       }
       case "messages_delivered": {
+        this.store.markConversationDelivered(
+          payload.conversation_id as string,
+          payload.user_id as string,
+        )
         this.emitter.emit("messages_delivered", {
           conversationId: payload.conversation_id as string,
           userId: payload.user_id as string,

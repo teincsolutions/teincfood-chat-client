@@ -5,6 +5,7 @@ import { ChatStore } from "./store"
 
 const HEARTBEAT_INTERVAL_MS = 5000
 const MAX_MISSED_HEARTBEATS = 3
+const CONNECT_TIMEOUT_MS = 10000
 const PUSH_TIMEOUT_MS = 10000
 const JOIN_TIMEOUT_MS = 5000
 const RECONNECT_BASE_DELAY_MS = 1000
@@ -50,6 +51,7 @@ export class PhoenixChatSocket {
   private store: ChatStore
   private wsUrl: string
   private token: string = ""
+  currentUserId: string | null = null
 
   constructor(
     wsUrl: string,
@@ -89,7 +91,16 @@ export class PhoenixChatSocket {
     return new Promise<void>((resolve, reject) => {
       this.ws = new WebSocket(url)
 
+      const timeout = setTimeout(() => {
+        if (this.ws?.readyState !== WebSocket.OPEN) {
+          this.ws?.close()
+          this.ws = null
+          reject(new Error("WebSocket connection timed out"))
+        }
+      }, CONNECT_TIMEOUT_MS)
+
       this.ws.onopen = () => {
+        clearTimeout(timeout)
         this.heartbeatPend = false
         this.heartbeatMissed = 0
         this.startHeartbeat()
@@ -98,12 +109,14 @@ export class PhoenixChatSocket {
       }
 
       this.ws.onclose = () => {
+        clearTimeout(timeout)
         this.stopHeartbeat()
         this.emitter.emit("connection:status", "disconnected")
         this.scheduleReconnect()
       }
 
       this.ws.onerror = () => {
+        clearTimeout(timeout)
         reject(new Error("WebSocket connection failed"))
       }
 
@@ -183,6 +196,9 @@ export class PhoenixChatSocket {
           await this.joinConversation(convId).catch(() => {})
         }
       }
+
+      // Retry failed optimistic messages after all channels re-joined
+      this.retryFailedMessages()
     } catch {
       this.scheduleReconnect()
     }
@@ -292,10 +308,13 @@ export class PhoenixChatSocket {
           }
           break
         }
-        case "new_message": {
-          const msg = toMessage((payload.message ?? payload) as Record<string, unknown>)
-          this.store.upsertMessage(msg.conversation_id, msg)
-          this.emitter.emit("message:received", msg)
+        case "message.sent": {
+          const convId = payload.entity_id as string
+          const actorId = payload.actor_id as string | undefined
+          if (convId && actorId !== this.currentUserId) {
+            this.store.incrementContactUnread(convId)
+            this.emitter.emit("message:received", null as any)
+          }
           break
         }
         case "messages_read": {
@@ -311,6 +330,10 @@ export class PhoenixChatSocket {
           break
         }
         case "messages_delivered": {
+          this.store.markConversationDelivered(
+            payload.conversation_id as string,
+            payload.user_id as string,
+          )
           this.emitter.emit("messages_delivered", {
             conversationId: payload.conversation_id as string,
             userId: payload.user_id as string,
@@ -433,12 +456,23 @@ export class PhoenixChatSocket {
           this.handleNewMessage(conversationId, payload)
           break
         case "messages_delivered":
+          this.store.markConversationDelivered(
+            conversationId,
+            payload.user_id as string,
+          )
           this.emitter.emit("messages_delivered", {
             conversationId,
             userId: payload.user_id as string,
           })
           break
         case "messages_read":
+          this.store.markConversationRead(
+            conversationId,
+            payload.reader_id as string,
+          )
+          if (payload.reader_id === this.currentUserId) {
+            this.store.resetContactUnread(conversationId)
+          }
           this.emitter.emit("messages_read", {
             conversationId,
             userId: payload.reader_id as string,
@@ -614,7 +648,7 @@ export class PhoenixChatSocket {
   // ─── Internal handlers ────────────────────────────
 
   private handleNewMessage(
-    _conversationId: string,
+    conversationId: string,
     payload: Record<string, unknown>,
   ): void {
     const serverMsg = toMessage(payload)
@@ -622,10 +656,42 @@ export class PhoenixChatSocket {
     const matchedClientId = this.optimistic.reconcile(serverMsg)
     if (matchedClientId) {
       this.store.upsertMessage(serverMsg.conversation_id, serverMsg)
+      this.store.updateContactLastMessage(
+        serverMsg.conversation_id,
+        serverMsg.content,
+        serverMsg.inserted_at,
+      )
       this.emitter.emit("message:sent", serverMsg)
     } else {
       this.store.upsertMessage(serverMsg.conversation_id, serverMsg)
+      this.store.updateContactLastMessage(
+        serverMsg.conversation_id,
+        serverMsg.content,
+        serverMsg.inserted_at,
+      )
+      this.store.incrementContactUnread(serverMsg.conversation_id)
       this.emitter.emit("message:received", serverMsg)
+
+      // Auto-mark as read for incoming messages from others
+      const topic = `chat:${conversationId}`
+      if (this.joinedChannels.has(topic)) {
+        this.push(topic, "mark_read", {})
+      }
+    }
+  }
+
+  /**
+   * Resend all optimistic messages with status "failed" across all
+   * joined conversations. Called automatically after reconnection.
+   */
+  private retryFailedMessages(): void {
+    const all = this.optimistic.getAll()
+    for (const msg of all) {
+      if (msg.status !== "failed") continue
+      if (!this.isJoined(msg.conversation_id)) continue
+      msg.status = "sending"
+      this.emitter.emit("message:sending", msg)
+      this.sendMessage(msg.conversation_id, msg.content, msg.metadata)
     }
   }
 

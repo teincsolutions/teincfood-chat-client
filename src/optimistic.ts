@@ -84,6 +84,16 @@ export class OptimisticEngine {
     )
   }
 
+  /** Remove a single pending message by client ID. */
+  removeByClientId(clientId: string): void {
+    this.pending.delete(clientId)
+  }
+
+  /** Return all pending messages across all conversations. */
+  getAll(): TempMessage[] {
+    return Array.from(this.pending.values())
+  }
+
   /** Clear all pending (e.g., on disconnect). */
   clear(): void {
     this.pending.clear()

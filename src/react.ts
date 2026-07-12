@@ -121,6 +121,8 @@ export function useChat(
       client.on("messages:loaded", (p) => {
         if (p.conversationId === conversationId) store.emit()
       }),
+      client.on("messages_read", () => store.emit()),
+      client.on("messages_delivered", () => store.emit()),
     ]
 
     return () => {
@@ -208,6 +210,10 @@ export function useConversations(
     const unsubs = [
       client.on("message:sent", () => store.emit()),
       client.on("message:received", () => store.emit()),
+      client.on("messages_read", () => store.emit()),
+      client.on("messages_delivered", () => store.emit()),
+      client.on("conversation:created", () => store.emit()),
+      client.on("conversation:updated", () => store.emit()),
     ]
     return () => unsubs.forEach((fn) => fn())
   }, [client, store])
@@ -274,6 +280,18 @@ export function useContacts(
   useEffect(() => {
     refresh()
   }, [params]) // eslint-disable-line react-hooks/exhaustive-deps
+
+  useEffect(() => {
+    const unsubs = [
+      client.on("message:sent", () => store.emit()),
+      client.on("message:received", () => store.emit()),
+      client.on("messages_read", () => store.emit()),
+      client.on("messages_delivered", () => store.emit()),
+      client.on("conversation:created", () => store.emit()),
+      client.on("conversation:updated", () => store.emit()),
+    ]
+    return () => unsubs.forEach((fn) => fn())
+  }, [client, store])
 
   const contacts = useSyncExternalStore(store.subscribe, store.getSnapshot)
 

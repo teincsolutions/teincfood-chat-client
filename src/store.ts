@@ -154,6 +154,18 @@ export class ChatStore {
     this.persistMessages(conversationId)
   }
 
+  /** Mark all undelivered messages in a conversation as delivered. */
+  markConversationDelivered(conversationId: string, joinerId: string): void {
+    const msgs = this.messages.get(conversationId)
+    if (!msgs) return
+    for (const m of msgs) {
+      if (m.sender_id !== joinerId && m.status === "sent") {
+        m.status = "delivered"
+      }
+    }
+    this.persistMessages(conversationId)
+  }
+
   /** Set unread count for a conversation. */
   setUnreadCount(conversationId: string, count: number): void {
     const conv = this.conversations.get(conversationId)
@@ -166,11 +178,42 @@ export class ChatStore {
   // ─── Contacts ─────────────────────────────────────
 
   getContacts(): Contact[] {
-    return this.contacts
+    return [...this.contacts]
   }
 
   setContacts(contacts: Contact[]): void {
     this.contacts = contacts
+    this.persistContacts()
+  }
+
+  updateContactLastMessage(
+    conversationId: string,
+    text: string,
+    sentAt: string,
+  ): void {
+    for (const c of this.contacts) {
+      if (c.conversation_id === conversationId) {
+        c.last_message = { text, sent_at: sentAt }
+      }
+    }
+    this.persistContacts()
+  }
+
+  incrementContactUnread(conversationId: string): void {
+    for (const c of this.contacts) {
+      if (c.conversation_id === conversationId) {
+        c.unread_count += 1
+      }
+    }
+    this.persistContacts()
+  }
+
+  resetContactUnread(conversationId: string): void {
+    for (const c of this.contacts) {
+      if (c.conversation_id === conversationId) {
+        c.unread_count = 0
+      }
+    }
     this.persistContacts()
   }
 
