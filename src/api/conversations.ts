@@ -18,6 +18,7 @@ export interface StartChatParams {
   contact_type?: ContactTypeRaw
   contact_id?: string | null
   order_id?: string | null
+  sender_business_id?: string | null
 }
 
 /** Map contacts-API contact_type values to chat-API values. */

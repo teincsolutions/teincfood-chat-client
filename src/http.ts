@@ -64,6 +64,7 @@ export class HttpClient {
             body: body != null ? JSON.stringify(body) : undefined,
           })
           if (!retryRes.ok) {
+            console.error(`[HttpClient] RETRY ${method} ${url} returned ${retryRes.status}`, await retryRes.clone().json().catch(() => retryRes.statusText))
             throw await toHttpError(retryRes)
           }
           return retryRes.json()
@@ -73,6 +74,7 @@ export class HttpClient {
     }
 
     if (!res.ok) {
+      console.error(`[HttpClient] ${method} ${url} returned ${res.status}`, await res.clone().json().catch(() => res.statusText))
       throw await toHttpError(res)
     }
 
