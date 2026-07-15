@@ -28,6 +28,7 @@ export interface Message {
   business_sender?: boolean
   sender_business_name?: string | null
   sender_business_logo?: string | null
+  sender_name?: string | null
 }
 
 /** Temp client-side ID used for optimistic reconciliation */

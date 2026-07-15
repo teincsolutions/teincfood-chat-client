@@ -1,4 +1,5 @@
-export { formatTime, formatDateSeparator, shouldShowDateSeparator } from "./formatters"
+export { formatTime, formatDateSeparator, shouldShowDateSeparator, parseMarkdown, stripMarkdown } from "./formatters"
+export type { MarkdownToken } from "./formatters"
 
 export { ChatClient } from "./client"
 export { TypedEventEmitter } from "./events"
