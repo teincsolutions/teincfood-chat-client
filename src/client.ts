@@ -257,7 +257,7 @@ export class ChatClient {
     q?: string,
   ): Promise<Contact[]> {
     const result = await this.contacts.getContacts(context, businessId, q)
-    this.store.setContacts(result)
+    this.store.setContacts(result, context, businessId)
     return result
   }
 
@@ -317,12 +317,21 @@ export class ChatClient {
         if (convId && (!actorId || actorId !== this.currentUserId)) {
           this.store.incrementContactUnread(convId)
         }
+        const msgContent = payload.content as string | undefined
+        const msgSentAt = payload.inserted_at as string | undefined
+        if (convId && msgContent && msgSentAt) {
+          this.store.updateContactLastMessage(convId, msgContent, msgSentAt)
+        }
         return { handled: true, event: "message.sent", data: payload, sequence: seq }
       }
       case "new_message": {
         const raw = (payload.message ?? payload) as Record<string, unknown>
         const msg = toMessage(raw)
         this.store.upsertMessage(msg.conversation_id, msg)
+        this.store.updateContactLastMessage(msg.conversation_id, msg.content, msg.inserted_at)
+        if (msg.sender_id !== this.currentUserId) {
+          this.store.incrementContactUnread(msg.conversation_id)
+        }
         this.emitter.emit("message:received", msg)
         return { handled: true, event: "message:received", data: raw, sequence: seq }
       }

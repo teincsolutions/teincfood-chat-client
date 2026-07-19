@@ -1,6 +1,6 @@
 {
   "name": "@teincfood/chat-client",
-  "version": "0.1.9",
+  "version": "0.1.10",
   "description": "Headless chat client library for TeincFood — handles auth, WebSocket, optimistic sends, and reactive React/RN bindings out of the box.",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",

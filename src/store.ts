@@ -10,10 +10,14 @@ const KV_CONVERSATIONS = "chat:conversations"
 const KV_CONTACTS = "chat:contacts"
 const KV_ACTIVE_CONV_IDS = "chat:active_conv_ids"
 
+function contextKey(context?: string, businessId?: string): string {
+  return `${context ?? "buyer"}|${businessId ?? ""}`
+}
+
 export class ChatStore {
   private messages = new Map<string, Message[]>()
   private conversations = new Map<string, Conversation>()
-  private contacts: Contact[] = []
+  private contacts = new Map<string, Contact[]>()
   private activeConversationIds = new Set<string>()
   private storage: ChatStorage
   private loaded = false
@@ -36,8 +40,12 @@ export class ChatStore {
       for (const c of convs) this.conversations.set(c.id, c)
     }
 
-    const ct = await this.storage.getItem<Contact[]>(KV_CONTACTS)
-    if (ct) this.contacts = ct
+    const ct = await this.storage.getItem<[string, Contact[]][]>(KV_CONTACTS)
+    if (ct) {
+      for (const [key, list] of ct) {
+        this.contacts.set(key, list)
+      }
+    }
 
     for (const id of this.activeConversationIds) {
       const msgs = await this.storage.getItem<Message[]>(KV_MESSAGES(id))
@@ -67,7 +75,10 @@ export class ChatStore {
   }
 
   private async persistContacts(): Promise<void> {
-    await this.storage.setItem(KV_CONTACTS, this.contacts)
+    await this.storage.setItem(
+      KV_CONTACTS,
+      Array.from(this.contacts.entries()),
+    )
   }
 
   // ─── Messages ─────────────────────────────────────
@@ -185,12 +196,17 @@ export class ChatStore {
 
   // ─── Contacts ─────────────────────────────────────
 
-  getContacts(): Contact[] {
-    return [...this.contacts]
+  /** Return contacts for a specific context, or all contacts flattened. */
+  getContacts(context?: string, businessId?: string): Contact[] {
+    if (context) {
+      return this.contacts.get(contextKey(context, businessId)) ?? []
+    }
+    return Array.from(this.contacts.values()).flat()
   }
 
-  setContacts(contacts: Contact[]): void {
-    this.contacts = contacts
+  /** Store contacts scoped to a context (replaces previous entries for that key). */
+  setContacts(contacts: Contact[], context?: string, businessId?: string): void {
+    this.contacts.set(contextKey(context, businessId), contacts)
     this.persistContacts()
   }
 
@@ -199,27 +215,33 @@ export class ChatStore {
     text: string,
     sentAt: string,
   ): void {
-    for (const c of this.contacts) {
-      if (c.conversation_id === conversationId) {
-        c.last_message = { text, sent_at: sentAt }
+    for (const list of this.contacts.values()) {
+      for (const c of list) {
+        if (c.conversation_id === conversationId) {
+          c.last_message = { text, sent_at: sentAt }
+        }
       }
     }
     this.persistContacts()
   }
 
   incrementContactUnread(conversationId: string): void {
-    for (const c of this.contacts) {
-      if (c.conversation_id === conversationId) {
-        c.unread_count += 1
+    for (const list of this.contacts.values()) {
+      for (const c of list) {
+        if (c.conversation_id === conversationId) {
+          c.unread_count += 1
+        }
       }
     }
     this.persistContacts()
   }
 
   resetContactUnread(conversationId: string): void {
-    for (const c of this.contacts) {
-      if (c.conversation_id === conversationId) {
-        c.unread_count = 0
+    for (const list of this.contacts.values()) {
+      for (const c of list) {
+        if (c.conversation_id === conversationId) {
+          c.unread_count = 0
+        }
       }
     }
     this.persistContacts()
@@ -230,7 +252,7 @@ export class ChatStore {
   clear(): void {
     this.messages.clear()
     this.conversations.clear()
-    this.contacts = []
+    this.contacts.clear()
     this.activeConversationIds.clear()
     this.loaded = false
     this.storage.clear()

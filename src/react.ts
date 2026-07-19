@@ -279,8 +279,8 @@ export function useContacts(
   const params = `${context ?? "buyer"}|${businessId ?? ""}|${q ?? ""}`
 
   const getContacts = useCallback(
-    () => client.store.getContacts(),
-    [client],
+    () => client.store.getContacts(context, businessId),
+    [client, context, businessId],
   )
 
   const store = useRef(externalStore(getContacts)).current
