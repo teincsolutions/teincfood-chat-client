@@ -28,7 +28,7 @@ export class OptimisticEngine {
       content: body,
       sender_id: senderId,
       conversation_id: conversationId,
-      direction: "inbound",
+      direction: "outbound",
       channel: "app",
       message_type: "text",
       status: "sending",

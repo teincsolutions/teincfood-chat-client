@@ -84,11 +84,15 @@ export class ChatStore {
     } else {
       msgs.push(message)
     }
-    msgs.sort(
-      (a, b) =>
-        new Date(a.inserted_at).getTime() -
-        new Date(b.inserted_at).getTime(),
-    )
+    msgs.sort((a, b) => {
+      const aTime = new Date(a.inserted_at).getTime()
+      const bTime = new Date(b.inserted_at).getTime()
+      if (isNaN(aTime) && isNaN(bTime)) return 0
+      if (isNaN(aTime)) return 1
+      if (isNaN(bTime)) return -1
+      if (aTime !== bTime) return aTime - bTime
+      return (a.id ?? "").localeCompare(b.id ?? "")
+    })
     this.messages.set(conversationId, msgs)
     this.activeConversationIds.add(conversationId)
     this.persistMessages(conversationId)
@@ -96,11 +100,15 @@ export class ChatStore {
   }
 
   setMessages(conversationId: string, messages: Message[]): void {
-    messages.sort(
-      (a, b) =>
-        new Date(a.inserted_at).getTime() -
-        new Date(b.inserted_at).getTime(),
-    )
+    messages.sort((a, b) => {
+      const aTime = new Date(a.inserted_at).getTime()
+      const bTime = new Date(b.inserted_at).getTime()
+      if (isNaN(aTime) && isNaN(bTime)) return 0
+      if (isNaN(aTime)) return 1
+      if (isNaN(bTime)) return -1
+      if (aTime !== bTime) return aTime - bTime
+      return (a.id ?? "").localeCompare(b.id ?? "")
+    })
     this.messages.set(conversationId, messages)
     this.activeConversationIds.add(conversationId)
     this.persistMessages(conversationId)

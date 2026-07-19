@@ -3,6 +3,7 @@ import {
   useCallback,
   useRef,
   useEffect,
+  useState,
   startTransition,
 } from "react"
 import type { ChatClient } from "./client"
@@ -52,6 +53,7 @@ export interface UseChatResult {
   hasMore: boolean
   loading: boolean
   error: Error | null
+  typingUserId: string | null
 }
 
 export function useChat(
@@ -62,6 +64,8 @@ export function useChat(
   const offsetRef = useRef(0)
   const hasMoreRef = useRef(true)
   const errorRef = useRef<Error | null>(null)
+  const [typingUserId, setTypingUserId] = useState<string | null>(null)
+  const typingTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
 
   const getMessages = useCallback(() => {
     if (!conversationId) return [] as Message[]
@@ -113,6 +117,12 @@ export function useChat(
       }
     })()
 
+    const TYPING_TIMEOUT_MS = 3000
+    const clearTyping = () => {
+      if (typingTimerRef.current) clearTimeout(typingTimerRef.current)
+      typingTimerRef.current = setTimeout(() => setTypingUserId(null), TYPING_TIMEOUT_MS)
+    }
+
     const unsubs = [
       client.on("message:sending", () => store.emit()),
       client.on("message:sent", () => store.emit()),
@@ -123,12 +133,19 @@ export function useChat(
       }),
       client.on("messages_read", () => store.emit()),
       client.on("messages_delivered", () => store.emit()),
+      client.on("typing", (p) => {
+        if (p.conversationId === conversationId) {
+          setTypingUserId(p.userId)
+          clearTyping()
+        }
+      }),
     ]
 
     return () => {
       cancelled = true
       unsubs.forEach((fn) => fn())
       client.leaveConversation(conversationId)
+      if (typingTimerRef.current) clearTimeout(typingTimerRef.current)
     }
   }, [conversationId, client, store])
 
@@ -181,6 +198,7 @@ export function useChat(
     hasMore: hasMoreRef.current,
     loading: loadingRef.current,
     error: errorRef.current,
+    typingUserId,
   }
 }
 

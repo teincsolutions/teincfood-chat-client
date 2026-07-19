@@ -176,26 +176,18 @@ export class PhoenixChatSocket {
       return
     }
 
-    const prevEventsTopic = this.eventsTopic
     const prevChannels = Array.from(this.joinedChannels)
 
-    // Clear state so joinConversation/joinEventsChannel
-    // actually send phx_join frames on the new socket
+    // Clear state so joinConversation
+    // actually sends phx_join frames on the new socket
     this.joinedChannels.clear()
     this.pendingJoins.clear()
     this.pendingPushes.clear()
     this.topicJoinRefs.clear()
-    this.eventsTopic = null
 
     try {
       await this.connect(token)
       this.reconnectAttempts = 0
-
-      // Rejoin events channel
-      if (prevEventsTopic) {
-        const userId = prevEventsTopic.replace("events:", "")
-        await this.joinEventsChannel(userId).catch(() => {})
-      }
 
       // Rejoin conversation channels
       for (const topic of prevChannels) {
@@ -330,8 +322,25 @@ export class PhoenixChatSocket {
           const convId = payload.entity_id as string
           const actorId = payload.actor_id as string | undefined
           if (convId && actorId !== this.currentUserId) {
-            this.store.incrementContactUnread(convId)
-            this.emitter.emit("message:received", null as any)
+            if (!this.isJoined(convId)) {
+              this.store.incrementContactUnread(convId)
+            }
+            this.emitter.emit("message:received", {
+              id: null,
+              content: "",
+              sender_id: actorId ?? "",
+              conversation_id: convId,
+              direction: "inbound",
+              channel: "app",
+              message_type: "text",
+              status: "sent",
+              external_id: null,
+              metadata: null,
+              replied_by_id: null,
+              read: false,
+              sent_at: new Date().toISOString(),
+              inserted_at: new Date().toISOString(),
+            } as Message)
           }
           break
         }
@@ -735,6 +744,10 @@ export function toMessage(p: Record<string, unknown>): Message {
     read: (p.read as boolean) ?? false,
     sent_at: ((p.sent_at ?? p.inserted_at) as string),
     inserted_at: p.inserted_at as string,
+    business_sender: p.business_sender as boolean | undefined,
+    sender_business_name: p.sender_business_name as string | null | undefined,
+    sender_business_logo: p.sender_business_logo as string | null | undefined,
+    sender_name: p.sender_name as string | null | undefined,
   }
 }
 

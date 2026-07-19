@@ -81,10 +81,6 @@ export class ChatClient {
     this.emitter.on("auth:expired", this.handleAuthExpiredBound)
     try {
       await this.socket.connect(tokens.access_token)
-      // Auto-join the events channel for live updates
-      if (this.currentUserId) {
-        await this.socket.joinEventsChannel(this.currentUserId).catch(() => {})
-      }
     } catch {
       // WS is optional — REST calls still work
     }
@@ -95,7 +91,6 @@ export class ChatClient {
   /** Disconnect WebSocket and clear all listeners. */
   stop(): void {
     this.emitter.off("auth:expired", this.handleAuthExpiredBound)
-    this.socket.leaveEventsChannel()
     this.socket.disconnect()
     this.optimistic.clear()
     this.emitter.removeAllListeners()
@@ -143,10 +138,6 @@ export class ChatClient {
   setCurrentUserId(userId: string): void {
     this.currentUserId = userId
     this.socket.currentUserId = userId
-    // Auto-join events channel if socket already connected
-    if (this.socket.isConnected()) {
-      this.socket.joinEventsChannel(userId).catch(() => {})
-    }
   }
 
   getCurrentUserId(): string | null {
@@ -320,6 +311,14 @@ export class ChatClient {
     }
 
     switch (event) {
+      case "message.sent": {
+        const convId = payload.entity_id as string
+        const actorId = payload.actor_id as string | undefined
+        if (convId && (!actorId || actorId !== this.currentUserId)) {
+          this.store.incrementContactUnread(convId)
+        }
+        return { handled: true, event: "message.sent", data: payload, sequence: seq }
+      }
       case "new_message": {
         const raw = (payload.message ?? payload) as Record<string, unknown>
         const msg = toMessage(raw)

@@ -243,6 +243,7 @@ export interface ChatEventMap {
   "message:sent": (msg: Message) => void
   "message:received": (msg: Message) => void
   "message:failed": (msg: TempMessage) => void
+  "message.sent": (data: Record<string, unknown>) => void
   "messages:loaded": (payload: MessagesLoadedPayload) => void
   "conversation:created": (payload: ConversationCreatedPayload) => void
   "conversation:updated": (payload: ConversationUpdatedPayload) => void
