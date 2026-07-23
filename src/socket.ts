@@ -324,23 +324,13 @@ export class PhoenixChatSocket {
           if (convId && actorId !== this.currentUserId) {
             if (!this.isJoined(convId)) {
               this.store.incrementContactUnread(convId)
+              const msgContent = (payload.content ?? payload.body) as string | undefined
+              const msgSentAt = (payload.inserted_at ?? payload.sent_at ?? new Date().toISOString()) as string
+              if (msgContent) {
+                this.store.updateContactLastMessage(convId, msgContent, msgSentAt)
+              }
+              this.emitter.emit("message:received", toMessage(payload))
             }
-            this.emitter.emit("message:received", {
-              id: null,
-              content: "",
-              sender_id: actorId ?? "",
-              conversation_id: convId,
-              direction: "inbound",
-              channel: "app",
-              message_type: "text",
-              status: "sent",
-              external_id: null,
-              metadata: null,
-              replied_by_id: null,
-              read: false,
-              sent_at: new Date().toISOString(),
-              inserted_at: new Date().toISOString(),
-            } as Message)
           }
           break
         }

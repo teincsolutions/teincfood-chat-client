@@ -302,7 +302,18 @@ export class ChatClient {
    * ```
    */
   handlePushPayload(payload: Record<string, unknown>): PushEventResult {
-    const event = payload.event as string | undefined
+    // Map FCM notification types to internal event names.
+    // The events channel sends `event` directly (e.g. "message.sent"),
+    // while FCM push uses `type` (e.g. "chat_message").
+    let event = payload.event as string | undefined
+    if (!event) {
+      const type = payload.type as string | undefined
+      if (type === "chat_message") {
+        event = "message.sent"
+      } else if (type === "conversation:created") {
+        event = "conversation:created"
+      }
+    }
     if (!event) return { handled: false }
 
     const seq = payload._sequence as number | undefined
@@ -312,14 +323,16 @@ export class ChatClient {
 
     switch (event) {
       case "message.sent": {
-        const convId = payload.entity_id as string
-        const actorId = payload.actor_id as string | undefined
+        // events channel uses entity_id; FCM uses conversation_id
+        const convId = (payload.entity_id ?? payload.conversation_id) as string
+        const actorId = (payload.actor_id ?? payload.sender_id) as string | undefined
         if (convId && (!actorId || actorId !== this.currentUserId)) {
           this.store.incrementContactUnread(convId)
         }
-        const msgContent = payload.content as string | undefined
-        const msgSentAt = payload.inserted_at as string | undefined
-        if (convId && msgContent && msgSentAt) {
+        // events channel uses content; FCM uses body
+        const msgContent = (payload.content ?? payload.body) as string | undefined
+        const msgSentAt = (payload.inserted_at ?? payload.sent_at ?? new Date().toISOString()) as string
+        if (convId && msgContent) {
           this.store.updateContactLastMessage(convId, msgContent, msgSentAt)
         }
         return { handled: true, event: "message.sent", data: payload, sequence: seq }

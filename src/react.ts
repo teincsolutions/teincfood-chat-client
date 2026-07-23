@@ -82,11 +82,19 @@ export function useChat(
     }
 
     const all = [...stored, ...pendingMap.values()]
-    all.sort(
-      (a, b) =>
-        new Date(a.inserted_at).getTime() -
-        new Date(b.inserted_at).getTime(),
-    )
+    all.sort((a, b) => {
+      const aPending = "_clientId" in a ? 1 : 0
+      const bPending = "_clientId" in b ? 1 : 0
+      if (aPending !== bPending) return aPending - bPending
+
+      const aTime = new Date(a.inserted_at).getTime()
+      const bTime = new Date(b.inserted_at).getTime()
+      if (isNaN(aTime) && isNaN(bTime)) return 0
+      if (isNaN(aTime)) return 1
+      if (isNaN(bTime)) return -1
+      if (aTime !== bTime) return aTime - bTime
+      return (a.id ?? "").localeCompare(b.id ?? "")
+    })
     return all
   }, [conversationId, client])
 
@@ -283,7 +291,14 @@ export function useContacts(
     [client, context, businessId],
   )
 
-  const store = useRef(externalStore(getContacts)).current
+  const getSnapshotRef = useRef(getContacts)
+  getSnapshotRef.current = getContacts
+
+  const storeRef = useRef<ReturnType<typeof externalStore<Contact[]>> | null>(null)
+  if (!storeRef.current) {
+    storeRef.current = externalStore(() => getSnapshotRef.current())
+  }
+  const store = storeRef.current!
 
   const refresh = useCallback(async () => {
     // Skip fetching if business context requires business_id
