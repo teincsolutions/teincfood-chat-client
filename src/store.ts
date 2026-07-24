@@ -206,7 +206,18 @@ export class ChatStore {
 
   /** Store contacts scoped to a context (replaces previous entries for that key). */
   setContacts(contacts: Contact[], context?: string, businessId?: string): void {
-    this.contacts.set(contextKey(context, businessId), contacts)
+    const key = contextKey(context, businessId)
+    const existing = this.contacts.get(key)
+    if (existing) {
+      const existingMap = new Map(existing.map((c) => [c.id, c]))
+      for (const c of contacts) {
+        const prev = existingMap.get(c.id)
+        if (prev && !c.last_message && prev.last_message) {
+          c.last_message = prev.last_message
+        }
+      }
+    }
+    this.contacts.set(key, contacts)
     this.persistContacts()
   }
 
